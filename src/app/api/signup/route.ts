@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
 import bcrypt from "bcrypt";
+import UAParser from "ua-parser-js";
 
 export async function POST(req: Request) {
   try {
     const { username, password, phone } = await req.json();
 
-    // 🔒 Basic validation
+    // 🔒 validation
     if (!username || !password || !phone) {
       return Response.json(
         { error: "All fields required" },
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
 
     const users = db.collection("users");
 
-    // ⚠️ Check existing user
+    // ⚠️ check existing
     const existing = await users.findOne({ username });
     if (existing) {
       return Response.json(
@@ -31,15 +32,38 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔐 Hash password
+    // 🔐 hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 💾 Insert user
+    // 🌍 get IP
+    const ip =
+      req.headers.get("x-forwarded-for") || "unknown";
+
+    // 📱 get user agent
+    const userAgent = req.headers.get("user-agent") || "";
+
+    // 🧠 parse device
+    const parser = new UAParser(userAgent);
+    const device = parser.getDevice();
+    const browser = parser.getBrowser();
+    const os = parser.getOS();
+
+    // 💾 insert user
     await users.insertOne({
       username,
       password: hashedPassword,
       phone,
+
       createdAt: new Date(),
+
+      // 📊 tracking data
+      lastLoginAt: new Date(),
+      lastLoginIP: ip,
+      userAgent,
+
+      device: device.model || "unknown",
+      browser: browser.name || "unknown",
+      os: os.name || "unknown",
     });
 
     return Response.json({ success: true });
