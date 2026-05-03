@@ -1,12 +1,11 @@
 import { db } from "@/lib/db";
 import bcrypt from "bcrypt";
-import UAParser from "ua-parser-js";
 
 export async function POST(req: Request) {
   try {
     const { username, password, phone } = await req.json();
 
-    // 🔒 validation
+    // 🔒 Validation
     if (!username || !password || !phone) {
       return Response.json(
         { error: "All fields required" },
@@ -23,7 +22,7 @@ export async function POST(req: Request) {
 
     const users = db.collection("users");
 
-    // ⚠️ check existing
+    // ⚠️ Check existing user
     const existing = await users.findOne({ username });
     if (existing) {
       return Response.json(
@@ -32,23 +31,17 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔐 hash password
+    // 🔐 Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 🌍 get IP
+    // 🌍 Get IP
     const ip =
-      req.headers.get("x-forwarded-for") || "unknown";
+      req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
 
-    // 📱 get user agent
-    const userAgent = req.headers.get("user-agent") || "";
+    // 📱 Get user agent
+    const userAgent = req.headers.get("user-agent") || "unknown";
 
-    // 🧠 parse device
-    const parser = new UAParser(userAgent);
-    const device = parser.getDevice();
-    const browser = parser.getBrowser();
-    const os = parser.getOS();
-
-    // 💾 insert user
+    // 💾 Insert user (NO ua-parser → no errors)
     await users.insertOne({
       username,
       password: hashedPassword,
@@ -56,20 +49,17 @@ export async function POST(req: Request) {
 
       createdAt: new Date(),
 
-      // 📊 tracking data
+      // 📊 tracking (basic, stable)
       lastLoginAt: new Date(),
       lastLoginIP: ip,
       userAgent,
-
-      device: device.model || "unknown",
-      browser: browser.name || "unknown",
-      os: os.name || "unknown",
     });
 
     return Response.json({ success: true });
 
   } catch (err) {
-    console.error(err);
+    console.error("Signup Error:", err);
+
     return Response.json(
       { error: "Server error" },
       { status: 500 }
