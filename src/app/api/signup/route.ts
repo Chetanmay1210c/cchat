@@ -3,27 +3,20 @@ import bcrypt from "bcrypt";
 
 export async function POST(req: Request) {
   try {
-    const { username, password, phone } = await req.json();
+    const { username, password, phone, dob, gender } = await req.json();
 
-    // 🔒 Validation
+    // 🔒 validation
     if (!username || !password || !phone) {
       return Response.json(
-        { error: "All fields required" },
-        { status: 400 }
-      );
-    }
-
-    if (password.length < 6) {
-      return Response.json(
-        { error: "Password must be at least 6 chars" },
+        { error: "Required fields missing" },
         { status: 400 }
       );
     }
 
     const users = db.collection("users");
 
-    // ⚠️ Check existing user
     const existing = await users.findOne({ username });
+
     if (existing) {
       return Response.json(
         { error: "Username already exists" },
@@ -31,35 +24,33 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔐 Hash password
+    // 🔐 hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 🌍 Get IP
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
-
-    // 📱 Get user agent
-    const userAgent = req.headers.get("user-agent") || "unknown";
-
-    // 💾 Insert user (NO ua-parser → no errors)
+    // 💾 create user
     await users.insertOne({
       username,
       password: hashedPassword,
       phone,
 
+      dob: dob ? new Date(dob) : null,
+      gender: gender || null,
+
       createdAt: new Date(),
 
-      // 📊 tracking (basic, stable)
-      lastLoginAt: new Date(),
-      lastLoginIP: ip,
-      userAgent,
+      // optional tracking at signup
+      lastLoginAt: null,
+      lastLoginIP: null,
+      userAgent: null,
     });
 
-    return Response.json({ success: true });
+    return Response.json({
+      success: true,
+      message: "User created",
+    });
 
   } catch (err) {
-    console.error("Signup Error:", err);
-
+    console.error(err);
     return Response.json(
       { error: "Server error" },
       { status: 500 }
