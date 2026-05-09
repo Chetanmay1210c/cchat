@@ -3,6 +3,9 @@ import jwt from "jsonwebtoken";
 const JWT_SECRET =
   process.env.JWT_SECRET!;
 
+// =====================
+// CREATE TOKEN
+// =====================
 export function createToken(data: {
   userId: string;
   username: string;
@@ -11,11 +14,14 @@ export function createToken(data: {
     data,
     JWT_SECRET,
     {
-      expiresIn: "15m",
+      expiresIn: "5m",
     }
   );
 }
 
+// =====================
+// VERIFY TOKEN (FIX ADDED)
+// =====================
 export function verifyToken(
   token: string
 ) {

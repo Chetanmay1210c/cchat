@@ -1,17 +1,38 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET =
+  process.env.JWT_SECRET!;
+
 export function middleware(
   req: NextRequest
 ) {
   const token =
-    req.cookies.get("token");
-
-  const isLoggedIn =
-    !!token;
+    req.cookies.get(
+      "token"
+    )?.value;
 
   const pathname =
     req.nextUrl.pathname;
+
+  let isLoggedIn =
+    false;
+
+  // ✅ VERIFY JWT
+  if (token) {
+    try {
+      jwt.verify(
+        token,
+        JWT_SECRET
+      );
+
+      isLoggedIn = true;
+    } catch {
+      isLoggedIn = false;
+    }
+  }
 
   // =====================
   // BLOCK LOGIN/SIGNUP
