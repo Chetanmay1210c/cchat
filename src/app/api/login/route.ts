@@ -1,21 +1,18 @@
-(
-  await cookies()
-).set(
+import { cookies } from "next/headers";
+
+cookies().set(
   "token",
   token,
   {
     httpOnly: true,
     secure:
-      process.env
-        .NODE_ENV ===
+      process.env.NODE_ENV ===
       "production",
 
-    sameSite:
-      "strict",
+    sameSite: "strict",
 
     path: "/",
 
-    maxAge:
-      60 * 5,
+    maxAge: 60 * 5, // 5 minutes
   }
 );
