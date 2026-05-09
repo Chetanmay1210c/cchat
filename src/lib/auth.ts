@@ -1,8 +1,30 @@
-import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
 
-export function getSession() {
-  const cookieStore = cookies();
-  const user = cookieStore.get("user")?.value;
+const JWT_SECRET =
+  process.env.JWT_SECRET!;
 
-  return user ? JSON.parse(user) : null;
+export function createToken(data: {
+  userId: string;
+  username: string;
+}) {
+  return jwt.sign(
+    data,
+    JWT_SECRET,
+    {
+      expiresIn: "15m",
+    }
+  );
+}
+
+export function verifyToken(
+  token: string
+) {
+  try {
+    return jwt.verify(
+      token,
+      JWT_SECRET
+    );
+  } catch {
+    return null;
+  }
 }

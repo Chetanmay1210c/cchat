@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import Link from "next/link";
 import { Heart, User, KeyRound, Loader2, Sparkles } from "lucide-react";
 
@@ -22,61 +23,95 @@ export default function LoginPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (
+    e: React.FormEvent
+  ) => {
     e.preventDefault();
+
     setLoading(true);
     setMsg("");
     setIsError(false);
 
     try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(form), // Unchanged logic
-      });
+      const res = await fetch(
+        "/api/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          credentials:
+            "include",
+          body: JSON.stringify(
+            form
+          ),
+        }
+      );
 
-      const data = await res.json();
+      const data =
+        await res.json();
 
       if (!res.ok) {
-        setMsg(data.error || "Hmm, that didn't match our records. Try again? 🥺");
-        setIsError(true);
-      } else {
-        // 💾 save username locally
-        localStorage.setItem(
-          "username",
-          form.username
-        );
-
-        // optional session expiry
-        localStorage.setItem(
-          "loginTime",
-          Date.now().toString()
-        );
-
         setMsg(
-          "Welcome back, love! 💖 Opening your space..."
+          data.error ||
+          "Invalid credentials"
+        );
+
+        setIsError(true);
+
+      } else {
+        setMsg(
+          "Welcome back 💖"
         );
 
         setIsError(false);
 
-        // 🚀 redirect
         setTimeout(() => {
-          router.push("/dashboard");
+          router.push(
+            "/dashboard"
+          );
         }, 1000);
       }
-    } catch (err) {
-      setMsg("Connection lost. Try again? 🥺");
+    } catch {
+      setMsg(
+        "Connection failed"
+      );
+
       setIsError(true);
     }
 
     setLoading(false);
   };
+  useEffect(() => {
+    const checkAuth =
+      async () => {
+        try {
+          const res =
+            await fetch(
+              "/api/auth/me",
+              {
+                credentials:
+                  "include",
+              }
+            );
 
-  return (
-    <div className="min-h-screen bg-[#fffbfb] flex items-center justify-center px-5 py-12 relative overflow-hidden">
-      <style>{`
+          if (res.ok) {
+            router.push(
+              "/dashboard"
+            );
+          }
+        } catch { }
+      };
+
+    checkAuth();
+  }, [router]);
+
+
+
+return (
+  <div className="min-h-screen bg-[#fffbfb] flex items-center justify-center px-5 py-12 relative overflow-hidden">
+    <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
         
         .font-display { font-family: 'Playfair Display', serif; }
@@ -190,116 +225,116 @@ export default function LoginPage() {
         }
       `}</style>
 
-      {/* Floating Background Elements */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full opacity-30 blur-[100px] bg-[radial-gradient(circle,#fce7f3,transparent)]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full opacity-30 blur-[100px] bg-[radial-gradient(circle,#fda4af,transparent)]" />
+    {/* Floating Background Elements */}
+    <div className="absolute inset-0 pointer-events-none z-0">
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full opacity-30 blur-[100px] bg-[radial-gradient(circle,#fce7f3,transparent)]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full opacity-30 blur-[100px] bg-[radial-gradient(circle,#fda4af,transparent)]" />
 
-        <Heart className="bg-heart" fill="currentColor" style={{ left: '10%', top: '70%', width: 45, height: 45, animationDelay: '1s', animationDuration: '9s' }} />
-        <Heart className="bg-heart" fill="currentColor" style={{ left: '80%', top: '85%', width: 55, height: 55, animationDelay: '3s', animationDuration: '11s' }} />
-        <Heart className="bg-heart" fill="currentColor" style={{ left: '65%', top: '15%', width: 30, height: 30, animationDelay: '6s', animationDuration: '7s' }} />
-      </div>
-
-      <div className="w-full max-w-[420px] relative z-10 font-sans afu opacity-0">
-
-        {/* Header Section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#f43f5e] to-[#be123c] shadow-lg shadow-rose-500/30 mb-6 afloat">
-            <Heart className="w-8 h-8 text-white" fill="currentColor" />
-          </div>
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold uppercase tracking-widest mb-4">
-            <Sparkles className="w-3.5 h-3.5" /> Welcome to CChat
-          </div>
-          <h1 className="font-display text-3xl font-bold text-[#4c1d35] leading-tight mb-2">
-            Welcome back <span className="text-gradient italic">love</span>
-          </h1>
-          <p className="text-[#835e71] text-sm">
-            Step into your private space. ✨
-          </p>
-        </div>
-
-        {/* The Glass Form Card */}
-        <form onSubmit={handleSubmit} className="glass-card rounded-[32px] p-6 sm:p-8 flex flex-col gap-5">
-
-          {/* Username Input */}
-          <div>
-            <label className="block text-xs font-bold text-[#4c1d35] mb-2 ml-2 tracking-wide uppercase">
-              Who is logging in? 😉
-            </label>
-            <div className="input-group">
-              <User className="input-icon w-5 h-5" />
-              <input
-                name="username"
-                placeholder="Your username..."
-                value={form.username}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className="inp"
-                autoComplete="username"
-              />
-            </div>
-          </div>
-
-          {/* Password Input */}
-          <div>
-            <label className="block text-xs font-bold text-[#4c1d35] mb-2 ml-2 tracking-wide uppercase">
-              Your secret key 🤫
-            </label>
-            <div className="input-group">
-              <KeyRound className="input-icon w-5 h-5" />
-              <input
-                name="password"
-                type="password"
-                placeholder="Enter password..."
-                value={form.password}
-                onChange={handleChange}
-                required
-                disabled={loading}
-                className="inp"
-                autoComplete="current-password"
-              />
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-romantic mt-3"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Unlocking...
-              </>
-            ) : (
-              "Enter our space 🚪"
-            )}
-          </button>
-
-          {/* Message Display */}
-          {msg && (
-            <div className={`mt-2 p-4 rounded-2xl text-sm font-semibold text-center border transition-all duration-300 ${isError
-                ? "bg-red-50 border-red-200 text-red-600"
-                : "bg-emerald-50 border-emerald-200 text-emerald-600"
-              }`}>
-              {msg}
-            </div>
-          )}
-        </form>
-
-        {/* Footer Link */}
-        <div className="mt-8 text-center">
-          <p className="text-[#835e71] text-sm">
-            Don't have a space yet?{" "}
-            <Link href="/signup" className="font-bold text-[#e11d48] hover:text-[#be123c] transition-colors underline decoration-2 decoration-rose-200 underline-offset-4">
-              Build one here.
-            </Link>
-          </p>
-        </div>
-
-      </div>
+      <Heart className="bg-heart" fill="currentColor" style={{ left: '10%', top: '70%', width: 45, height: 45, animationDelay: '1s', animationDuration: '9s' }} />
+      <Heart className="bg-heart" fill="currentColor" style={{ left: '80%', top: '85%', width: 55, height: 55, animationDelay: '3s', animationDuration: '11s' }} />
+      <Heart className="bg-heart" fill="currentColor" style={{ left: '65%', top: '15%', width: 30, height: 30, animationDelay: '6s', animationDuration: '7s' }} />
     </div>
-  );
+
+    <div className="w-full max-w-[420px] relative z-10 font-sans afu opacity-0">
+
+      {/* Header Section */}
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#f43f5e] to-[#be123c] shadow-lg shadow-rose-500/30 mb-6 afloat">
+          <Heart className="w-8 h-8 text-white" fill="currentColor" />
+        </div>
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-rose-50 border border-rose-100 text-rose-600 text-xs font-bold uppercase tracking-widest mb-4">
+          <Sparkles className="w-3.5 h-3.5" /> Welcome to CChat
+        </div>
+        <h1 className="font-display text-3xl font-bold text-[#4c1d35] leading-tight mb-2">
+          Welcome back <span className="text-gradient italic">love</span>
+        </h1>
+        <p className="text-[#835e71] text-sm">
+          Step into your private space. ✨
+        </p>
+      </div>
+
+      {/* The Glass Form Card */}
+      <form onSubmit={handleSubmit} className="glass-card rounded-[32px] p-6 sm:p-8 flex flex-col gap-5">
+
+        {/* Username Input */}
+        <div>
+          <label className="block text-xs font-bold text-[#4c1d35] mb-2 ml-2 tracking-wide uppercase">
+            Who is logging in? 😉
+          </label>
+          <div className="input-group">
+            <User className="input-icon w-5 h-5" />
+            <input
+              name="username"
+              placeholder="Your username..."
+              value={form.username}
+              onChange={handleChange}
+              required
+              disabled={loading}
+              className="inp"
+              autoComplete="username"
+            />
+          </div>
+        </div>
+
+        {/* Password Input */}
+        <div>
+          <label className="block text-xs font-bold text-[#4c1d35] mb-2 ml-2 tracking-wide uppercase">
+            Your secret key 🤫
+          </label>
+          <div className="input-group">
+            <KeyRound className="input-icon w-5 h-5" />
+            <input
+              name="password"
+              type="password"
+              placeholder="Enter password..."
+              value={form.password}
+              onChange={handleChange}
+              required
+              disabled={loading}
+              className="inp"
+              autoComplete="current-password"
+            />
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn-romantic mt-3"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Unlocking...
+            </>
+          ) : (
+            "Enter our space 🚪"
+          )}
+        </button>
+
+        {/* Message Display */}
+        {msg && (
+          <div className={`mt-2 p-4 rounded-2xl text-sm font-semibold text-center border transition-all duration-300 ${isError
+            ? "bg-red-50 border-red-200 text-red-600"
+            : "bg-emerald-50 border-emerald-200 text-emerald-600"
+            }`}>
+            {msg}
+          </div>
+        )}
+      </form>
+
+      {/* Footer Link */}
+      <div className="mt-8 text-center">
+        <p className="text-[#835e71] text-sm">
+          Don't have a space yet?{" "}
+          <Link href="/signup" className="font-bold text-[#e11d48] hover:text-[#be123c] transition-colors underline decoration-2 decoration-rose-200 underline-offset-4">
+            Build one here.
+          </Link>
+        </p>
+      </div>
+
+    </div>
+  </div>
+);
 }
