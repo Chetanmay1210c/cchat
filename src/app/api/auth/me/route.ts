@@ -3,50 +3,38 @@ import { verifyToken } from "@/lib/auth";
 
 export async function GET() {
   try {
-    const token = (
-      await cookies()
-    ).get("token")?.value;
+    // ✅ FIX: no await
+    const cookieStore = cookies();
+
+    const token = cookieStore.get("token")?.value;
 
     if (!token) {
       return Response.json(
-        {
-          authenticated:
-            false,
-        },
-        {
-          status: 401,
-        }
+        { authenticated: false },
+        { status: 401 }
       );
     }
 
-    const decoded =
-      verifyToken(token);
+    const decoded = verifyToken(token);
 
     if (!decoded) {
       return Response.json(
-        {
-          authenticated:
-            false,
-        },
-        {
-          status: 401,
-        }
+        { authenticated: false },
+        { status: 401 }
       );
     }
 
     return Response.json({
       authenticated: true,
-      user: decoded,
-    });
-  } catch {
-    return Response.json(
-      {
-        authenticated:
-          false,
+      user: {
+        userId: (decoded as any).userId,
+        username: (decoded as any).username,
       },
-      {
-        status: 401,
-      }
+    });
+  } catch (err) {
+    return Response.json(
+      { authenticated: false },
+      { status: 401 }
     );
   }
 }
