@@ -3,8 +3,8 @@ import { verifyToken } from "@/lib/auth";
 
 export async function GET() {
   try {
-    // ✅ FIX: no await
-    const cookieStore = cookies();
+    // 🛠️ FIXED: Added await here because cookies() returns a Promise in Next.js 15+
+    const cookieStore = await cookies();
 
     const token = cookieStore.get("token")?.value;
 
