@@ -1,12 +1,12 @@
 import { db } from "@/lib/db";
-import bcrypt from "bcrypt";
+// 🛠️ FIX 1: Switched to bcryptjs to avoid Vercel native binary build errors
+import bcrypt from "bcryptjs"; 
 import { createToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 
 export async function POST(req: Request) {
   try {
-    const { username, password } =
-      await req.json();
+    const { username, password } = await req.json();
 
     if (!username || !password) {
       return Response.json(
@@ -16,7 +16,6 @@ export async function POST(req: Request) {
     }
 
     const users = db.collection("users");
-
     const user = await users.findOne({ username });
 
     if (!user) {
@@ -39,12 +38,8 @@ export async function POST(req: Request) {
     }
 
     // 🌍 IP + device
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0] ||
-      "unknown";
-
-    const userAgent =
-      req.headers.get("user-agent") || "unknown";
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
+    const userAgent = req.headers.get("user-agent") || "unknown";
 
     await users.updateOne(
       { username },
@@ -64,7 +59,7 @@ export async function POST(req: Request) {
       username: user.username,
     });
 
-    // 🍪 FIX HERE (IMPORTANT)
+    // 🍪 FIXED: Perfect usage of await cookies() for Next.js 15+!
     const cookieStore = await cookies();
 
     cookieStore.set("token", token, {
