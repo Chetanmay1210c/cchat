@@ -54,8 +54,9 @@ export async function POST(req: Request) {
     );
 
     // 🔑 JWT
+    // 🛠️ FIX 2: Safely handle the _id conversion to string using a fallback
     const token = createToken({
-      userId: user._id.toString(),
+      userId: user._id ? user._id.toString() : "",
       username: user.username,
     });
 
