@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import bcrypt from "bcrypt";
+// 🛠️ FIX: Switched to bcryptjs to keep Vercel builds happy
+import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
   try {
