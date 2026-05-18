@@ -3,6 +3,9 @@
 import { NextResponse } from "next/server";
 import { ensureMessagesCollection } from "@/lib/ensureCollections";
 
+// Force Next.js to skip pre-rendering this route during build time
+export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const { roomId } = await req.json();
