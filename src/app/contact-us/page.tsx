@@ -1,16 +1,11 @@
-// src/app/contact-us/page.tsx 
-// Pure Server Component — no "use client"
-
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { MessageCircleHeart, CheckCircle2, AlertCircle, Sparkles, Heart } from "lucide-react";
+import { MessageCircleHeart, Sparkles, Heart } from "lucide-react";
 import ContactClient from "./ContactClient";
 
 const MAX_MESSAGES = 3;
 const COOLDOWN_SECONDS = 600; // 10 minutes
 
-// ── In-memory rate limit store (swap for Redis/DB in production) ─────────────
-// Key: IP address → { count, firstSent }
+// In-memory rate limit store (Swap out for Redis cache/database in true multi-server production environments)
 const ipStore = new Map<string, { count: number; firstSent: number }>();
 
 function getRateLimitStatus(ip: string): { blocked: boolean; remaining: number; resetIn: number } {
@@ -21,7 +16,7 @@ function getRateLimitStatus(ip: string): { blocked: boolean; remaining: number; 
 
   const elapsed = Math.floor((now - record.firstSent) / 1000);
 
-  // Window expired — clear it
+  // Time Window completely expired — clean slate
   if (elapsed >= COOLDOWN_SECONDS) {
     ipStore.delete(ip);
     return { blocked: false, remaining: MAX_MESSAGES, resetIn: 0 };
@@ -32,56 +27,7 @@ function getRateLimitStatus(ip: string): { blocked: boolean; remaining: number; 
   return { blocked: record.count >= MAX_MESSAGES, remaining, resetIn };
 }
 
-// ── Server Action ─────────────────────────────────────────────────────────────
-async function sendContactMessage(formData: FormData) {
-  "use server";
-
-  const headersList = await headers();
-  const ip =
-    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    headersList.get("x-real-ip") ??
-    "unknown";
-
-  const name = (formData.get("name") as string | null)?.trim() ?? "";
-  const message = (formData.get("message") as string | null)?.trim() ?? "";
-
-  // ── Validation ────────────────────────────────────────────────────────────
-  if (name.length < 2 || name.length > 50) {
-    redirect("/contact-us?error=name");
-  }
-
-  const wordCount = message === "" ? 0 : message.split(/\s+/).length;
-  if (wordCount < 2 || wordCount > 500) {
-    redirect("/contact-us?error=message");
-  }
-
-  // ── Rate limiting ─────────────────────────────────────────────────────────
-  const { blocked, resetIn } = getRateLimitStatus(ip);
-  if (blocked) {
-    redirect(`/contact-us?error=ratelimit&reset=${resetIn}`);
-  }
-
-  // ── Record the send ───────────────────────────────────────────────────────
-  const existing = ipStore.get(ip);
-  if (existing) {
-    existing.count += 1;
-  } else {
-    ipStore.set(ip, { count: 1, firstSent: Date.now() });
-  }
-
-  // ── TODO: send email / save to DB here ────────────────────────────────────
-  // e.g. await sendEmail({ name, message });
-  // e.g. await db.insert(contactMessages).values({ name, message, ip });
-
-  const newRecord = ipStore.get(ip)!;
-  const remaining = Math.max(0, MAX_MESSAGES - newRecord.count);
-  redirect(`/contact-us?success=1&remaining=${remaining}`);
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 interface SearchParams {
-  success?: string;
-  remaining?: string;
   error?: string;
   reset?: string;
 }
@@ -100,23 +46,54 @@ export default async function ContactPage({
     "unknown";
 
   const { blocked, remaining, resetIn } = getRateLimitStatus(ip);
-
-  const isSuccess = params.success === "1";
   const errorType = params.error ?? null;
-  const successRemaining = params.remaining ? Number(params.remaining) : remaining;
-  const displayRemaining = isSuccess ? successRemaining : remaining;
-  const msgCount = MAX_MESSAGES - displayRemaining;
 
-  const errorMessage =
-    errorType === "name"
-      ? "Your sweet name needs to be between 2 and 50 characters."
-      : errorType === "message"
-      ? "Your message should be between 2 and 500 words."
-      : errorType === "ratelimit"
-      ? `Whoa there, lovebirds! You've reached the limit. Please wait for the timer.`
-      : null;
+  // Next.js Server Action running natively inside container architecture
+  async function sendContactMessage(formData: FormData) {
+    "use server";
 
-  const serverResetIn = errorType === "ratelimit" && params.reset ? Number(params.reset) : resetIn;
+    const serverHeaders = await headers();
+    const serverIp =
+      serverHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      serverHeaders.get("x-real-ip") ??
+      "unknown";
+
+    const name = (formData.get("name") as string | null)?.trim() ?? "";
+    const message = (formData.get("message") as string | null)?.trim() ?? "";
+
+    // ── Server-Side Structural Validation ───────────────────────────────────
+    if (name.length < 2 || name.length > 50) {
+      return { success: false, errorType: "name" };
+    }
+
+    const wordCount = message === "" ? 0 : message.split(/\s+/).length;
+    if (wordCount < 2 || wordCount > 500) {
+      return { success: false, errorType: "message" };
+    }
+
+    // ── Rate Limiting Assessment ──────────────────────────────────────────
+    const status = getRateLimitStatus(serverIp);
+    if (status.blocked) {
+      return { success: false, errorType: "ratelimit", resetIn: status.resetIn };
+    }
+
+    // ── Incrementing Actions Record ─────────────────────────────────────────
+    const existing = ipStore.get(serverIp);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      ipStore.set(serverIp, { count: 1, firstSent: Date.now() });
+    }
+
+    // ── TODO: Insert secure system integrations safely here ───────────────
+    // e.g. await sendEmail({ name, message });
+    // e.g. await db.insert(contactMessages).values({ name, message, ip: serverIp });
+
+    const updatedRecord = ipStore.get(serverIp)!;
+    const finalRemaining = Math.max(0, MAX_MESSAGES - updatedRecord.count);
+
+    return { success: true, remaining: finalRemaining };
+  }
 
   return (
     <div className="min-h-screen bg-[#fffbfb] text-[#2d1b2e] overflow-x-hidden relative">
@@ -239,8 +216,8 @@ export default async function ContactPage({
         }
       `}</style>
 
-      {/* Floating Background Hearts (Romantic Vibe) */}
-      <div style={{ position:"fixed", inset:0, pointerEvents:"none", zIndex:1, overflow:"hidden" }}>
+      {/* Floating Background Hearts Animations */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 1, overflow: "hidden" }}>
         <Heart className="bg-heart" fill="currentColor" style={{ left: '10%', top: '80%', width: 40, height: 40, animationDelay: '0s' }} />
         <Heart className="bg-heart" fill="currentColor" style={{ left: '85%', top: '90%', width: 60, height: 60, animationDelay: '2s', animationDuration: '10s' }} />
         <Heart className="bg-heart" fill="currentColor" style={{ left: '50%', top: '70%', width: 30, height: 30, animationDelay: '4s', animationDuration: '7s' }} />
@@ -248,136 +225,48 @@ export default async function ContactPage({
         <Heart className="bg-heart" fill="currentColor" style={{ left: '20%', top: '95%', width: 50, height: 50, animationDelay: '3s', animationDuration: '9s' }} />
       </div>
 
-      {/* Soft Gradient Background Orbs */}
-      <div style={{ position:"fixed", inset:0, pointerEvents:"none", zIndex:0, overflow:"hidden" }} className="romantic-bg">
-        <div style={{ position:"absolute", top:'-10%', left:'-10%', width:'50vw', height:'50vw', borderRadius:"50%", opacity:0.4, filter:"blur(100px)", background:"radial-gradient(circle, #fce7f3, transparent)" }} />
-        <div style={{ position:"absolute", bottom:'-10%', right:'-10%', width:'60vw', height:'60vw', borderRadius:"50%", opacity:0.3, filter:"blur(100px)", background:"radial-gradient(circle, #fda4af, transparent)" }} />
+      {/* Gradient Presentation Panels */}
+      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }} className="romantic-bg">
+        <div style={{ position: "absolute", top: '-10%', left: '-10%', width: '50vw', height: '50vw', borderRadius: "50%", opacity: 0.4, filter: "blur(100px)", background: "radial-gradient(circle, #fce7f3, transparent)" }} />
+        <div style={{ position: "absolute", bottom: '-10%', right: '-10%', width: '60vw', height: '60vw', borderRadius: "50%", opacity: 0.3, filter: "blur(100px)", background: "radial-gradient(circle, #fda4af, transparent)" }} />
       </div>
 
-      <div style={{ position:"relative", zIndex:10, minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"64px 20px" }}>
-        <div style={{ width:"100%", maxWidth:460, margin:"0 auto" }}>
+      <div style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "64px 20px" }}>
+        <div style={{ width: "100%", maxWidth: 460, margin: "0 auto" }}>
 
-          {/* Icon */}
-          <div className="afi" style={{ display:"flex", justifyContent:"center", marginBottom:28 }}>
-            <div className="apulse afloat" style={{ width:76, height:76, borderRadius:24, display:"flex", alignItems:"center", justifyContent:"center", background:"linear-gradient(135deg,#f43f5e,#be123c)", transform:"rotate(-5deg)" }}>
-              <MessageCircleHeart style={{ width:38, height:38, color:"white" }} />
+          {/* Glowing Animated Icon */}
+          <div className="afi" style={{ display: "flex", justifyContent: "center", marginBottom: 28 }}>
+            <div className="apulse afloat" style={{ width: 76, height: 76, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg,#f43f5e,#be123c)", transform: "rotate(-5deg)" }}>
+              <MessageCircleHeart style={{ width: 38, height: 38, color: "white" }} />
             </div>
           </div>
 
-          {/* Heading */}
-          <div className="afu d1" style={{ textAlign:"center", marginBottom:40 }}>
-            <div className="pill" style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"8px 20px", borderRadius:999, fontSize:12, fontWeight:700, marginBottom:20, letterSpacing:"0.1em", textTransform:"uppercase" }}>
-              <Sparkles style={{ width:14, height:14 }} /> Couple's Support
+          {/* Text Introductions Header */}
+          <div className="afu d1" style={{ textAlign: "center", marginBottom: 40 }}>
+            <div className="pill" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 20px", borderRadius: 999, fontSize: 12, fontWeight: 700, marginBottom: 20, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              <Sparkles style={{ width: 14, height: 14 }} /> Couple's Support
             </div>
-            <h1 className="font-display" style={{ fontSize:"2.75rem", fontWeight:700, lineHeight:1.1, color:"#4c1d35", marginBottom:16 }}>
-              We&apos;re here <br/>
-              <span className="text-gradient" style={{ fontStyle:"italic", fontWeight:600 }}>for you both.</span>
+            <h1 className="font-display" style={{ fontSize: "2.75rem", fontWeight: 700, lineHeight: 1.1, color: "#4c1d35", marginBottom: 16 }}>
+              We&apos;re here <br />
+              <span className="text-gradient" style={{ fontStyle: "italic", fontWeight: 600 }}>for you both.</span>
             </h1>
-            <p style={{ color:"#835e71", fontSize:"1.05rem", lineHeight:1.6, padding:"0 20px" }}>
+            <p style={{ color: "#835e71", fontSize: "1.05rem", lineHeight: 1.6, padding: "0 20px" }}>
               Whether it's a bug or a sweet idea for your shared space, drop us a note. 💌
             </p>
           </div>
 
-          {/* Dots bar */}
-          <div className="afu d2 glass-card" style={{ borderRadius:20, padding:"16px 24px", marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div>
-              <p style={{ fontSize:13, fontWeight:700, color:"#4c1d35", marginBottom:4 }}>Love Letters Left</p>
-              <p style={{ fontSize:11, color:"#9d7b8b", fontWeight:500 }}>3 max · resets in 10 mins</p>
-            </div>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              {[...Array(MAX_MESSAGES)].map((_, i) => (
-                <span key={i} className={`dot ${i < msgCount ? "dot-on" : "dot-off"}`} />
-              ))}
-              <span style={{ marginLeft:8, fontSize:15, fontWeight:700, color:"#4c1d35" }}>
-                {displayRemaining}<span style={{ color:"#f43f5e", opacity:0.5, fontWeight:500 }}>/{MAX_MESSAGES}</span>
-              </span>
-            </div>
-          </div>
+          {/* Mount Unified Dynamic Client Form Island */}
+          <ContactClient
+            sendAction={sendContactMessage}
+            maxMessages={MAX_MESSAGES}
+            initialRemaining={remaining}
+            initialResetIn={params.reset ? Number(params.reset) : resetIn}
+            initialErrorType={errorType}
+          />
 
-          {/* Cooldown timer — client island */}
-          {(blocked || errorType === "ratelimit") && (
-            <div className="afu d2">
-              <ContactClient initialSeconds={serverResetIn} />
-            </div>
-          )}
-
-          {/* Form card */}
-          <div className="afu d3 glass-card" style={{ borderRadius:28, padding:32 }}>
-
-            {/* Success */}
-            {isSuccess && (
-              <div style={{ display:"flex", alignItems:"flex-start", gap:14, background:"rgba(240, 253, 244, 0.8)", border:"1px solid #bbf7d0", color:"#15803d", padding:"18px", borderRadius:20, marginBottom:24 }}>
-                <CheckCircle2 style={{ width:24, height:24, color:"#22c55e", flexShrink:0 }} />
-                <div>
-                  <p style={{ fontWeight:700, fontSize:15 }}>Message delivered! 🕊️</p>
-                  <p style={{ fontSize:13, marginTop:4, opacity:0.9, lineHeight:1.4 }}>We&apos;ll get back to you soon. You have {successRemaining} message{successRemaining !== 1 ? "s" : ""} left to send.</p>
-                </div>
-              </div>
-            )}
-
-            {/* Error */}
-            {errorMessage && (
-              <div style={{ display:"flex", alignItems:"center", gap:14, background:"rgba(254, 242, 242, 0.8)", border:"1px solid #fecaca", color:"#dc2626", padding:"18px", borderRadius:20, marginBottom:24 }}>
-                <AlertCircle style={{ width:24, height:24, flexShrink:0 }} />
-                <p style={{ fontSize:14, fontWeight:600 }}>{errorMessage}</p>
-              </div>
-            )}
-
-            <form action={sendContactMessage} style={{ display:"flex", flexDirection:"column", gap:24 }}>
-
-              {/* Name */}
-              <div>
-                <label style={{ display:"block", fontSize:12, fontWeight:700, color:"#4c1d35", marginBottom:8, marginLeft:6, letterSpacing:"0.05em" }}>
-                  Who is writing this? 😉
-                </label>
-                <input
-                  name="name"
-                  maxLength={50}
-                  placeholder="e.g. Arjun or Priya"
-                  className="inp"
-                  required
-                  disabled={blocked}
-                  autoComplete="off"
-                />
-              </div>
-
-              {/* Message */}
-              <div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, marginLeft:6, marginRight:4 }}>
-                  <label style={{ fontSize:12, fontWeight:700, color:"#4c1d35", letterSpacing:"0.05em" }}>
-                    What's on your mind? 💌
-                  </label>
-                  <span style={{ fontSize:11, fontWeight:600, color:"#e11d48", background:"#fff1f2", padding:"4px 10px", borderRadius:8 }}>
-                    max 500 words
-                  </span>
-                </div>
-                <textarea
-                  name="message"
-                  rows={4}
-                  placeholder="Tell us what you need help with, or share a feature you both would love to see..."
-                  className="inp"
-                  required
-                  disabled={blocked}
-                />
-              </div>
-
-              <button type="submit" className="btn-romantic" disabled={blocked}>
-                {blocked ? (
-                  "🔒 Waiting for cooldown..."
-                ) : (
-                  <>
-                    <Heart style={{ width: 18, height: 18, fill: "white" }} />
-                    Send with Love
-                  </>
-                )}
-              </button>
-
-            </form>
-          </div>
-
-          {/* Footer note */}
-          <div className="afi d4" style={{ marginTop:28, textAlign:"center" }}>
-            <p style={{ fontSize:12, color:"#9d7b8b", fontWeight:500 }}>
+          {/* Footer Note */}
+          <div className="afi d4" style={{ marginTop: 28, textAlign: "center" }}>
+            <p style={{ fontSize: 12, color: "#9d7b8b", fontWeight: 500 }}>
               🔐 Always private · Just for the two of you
             </p>
           </div>
